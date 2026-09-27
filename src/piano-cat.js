@@ -58,6 +58,15 @@ function piano() {
   pline(14, 1076, 1162, 1076, { color: [150, 170, 195], alpha: 0.35 });
 }
 
+// black keys: groups of 2 and 3, one octave = 525px; white keys are 75px wide starting at x = 27
+function blackKeyCenters() {
+  const centers = [];
+  for (let base = 27 - 525; base < W + 525; base += 525) {
+    [0, 75, 223, 298, 373].forEach(d => centers.push(base + d));
+  }
+  return centers;
+}
+
 function keys() {
   const top = 822, bot = 944, bkH = 76, bkW = 46;
   // white keys base
@@ -74,12 +83,7 @@ function keys() {
     colors: [[120, 118, 115], [150, 148, 144]], density: 1.1, alpha: [0.35, 0.8], len: [3, 10], width: [1, 2], angle: Math.PI / 2, angleVar: 0.4, tooth: 0.55
   });
   pline(0, bot + 7, W, bot + 7, { color: [160, 158, 150], alpha: 0.3 });
-  // black keys: groups of 2 and 3, one octave = 525px
-  const centers = [];
-  for (let base = 27 - 525; base < W + 525; base += 525) {
-    [0, 75, 223, 298, 373].forEach(d => centers.push(base + d));
-  }
-  centers.forEach(cx => {
+  blackKeyCenters().forEach(cx => {
     if (cx + bkW / 2 < -10 || cx - bkW / 2 > W + 10) return;
     const x = cx - bkW / 2 + rand(-1.5, 1.5), y = top + rand(-1, 1.5);
     crayon(roughRect(x, y, bkW, bkH + rand(-2, 2), 1.2), [x, y, bkW, bkH], {
@@ -179,44 +183,64 @@ function pencil() {
   pline(836, y + h, 864, y + h / 2, { color: [120, 95, 60], alpha: 0.6, passes: 1 });
 }
 
-function creature() {
-  const ORANGE = [232, 108, 66], ORANGE_D = [214, 86, 50], ORANGE_L = [242, 136, 92];
-  const parts = [
-    [328, 452, 362, 290],    // body
-    [265, 580, 66, 82],      // left arm
-    [688, 567, 58, 84],      // right arm
-    [335, 738, 66, 94], [433, 738, 67, 94], [522, 738, 68, 94], [624, 738, 66, 94] // legs
-  ];
-  const polys = parts.map(([x, y, w, h]) => roughPoly(rectPts(x, y, w, h), 1.2));
+const LEGS = [[335, 66], [433, 67], [522, 68], [624, 66]]; // x, width
+const ORANGE = [232, 108, 66], ORANGE_D = [214, 86, 50], ORANGE_L = [242, 136, 92];
+
+// The creature is drawn as separate pieces (legs, arms, body, eyes) so each can move.
+// Every piece is drawn at its resting position; motion is applied as a vertical offset.
+function orangePiece(rects, extra) {
+  const polys = rects.map(([x, y, w, h]) => roughPoly(rectPts(x, y, w, h), 1.2));
   const shape = c => polys.forEach(p => polyPath(c, p));
-  // base colour: dense diagonal hatching
-  crayon(shape, [262, 448, 488, 388], {
+  const x0 = Math.min(...rects.map(r => r[0])) - 3, y0 = Math.min(...rects.map(r => r[1])) - 3;
+  const x1 = Math.max(...rects.map(r => r[0] + r[2])) + 3, y1 = Math.max(...rects.map(r => r[1] + r[3])) + 3;
+  const box = [x0, y0, x1 - x0, y1 - y0];
+  // base colour: short strokes at random angles, lots of paper tooth
+  crayon(shape, box, {
     colors: [ORANGE, ORANGE_D, ORANGE_L], density: 3.4, alpha: [0.4, 0.9], len: [6, 20], width: [1.2, 2.6],
     angle: -0.9, angleVar: 1.4, tooth: 0.75, light: 12, curve: 2
   });
   // second layer to deepen, less tooth
-  crayon(shape, [262, 448, 488, 388], {
+  crayon(shape, box, {
     colors: [[222, 98, 58], [230, 112, 70]], density: 1, alpha: [0.2, 0.5], len: [6, 18], angle: 0.6, angleVar: 1.5, tooth: 0.45
   });
-  // lighter top face (the box's lid)
-  crayon(roughRect(330, 452, 358, 26, 1), [330, 452, 358, 26], {
-    colors: [[244, 160, 118], [238, 142, 100]], density: 2.4, alpha: [0.4, 0.85], len: [8, 24], tooth: 0.4
-  });
-  // darker right side & bottom edges for volume
-  crayon(roughRect(672, 470, 18, 270, 1), [672, 470, 18, 270], {
-    colors: [[190, 70, 40]], density: 1.2, alpha: [0.2, 0.5], len: [20, 50], angle: Math.PI / 2, tooth: 0.4
-  });
-  crayon(roughRect(265, 646, 66, 16, 1), [265, 646, 66, 16], { colors: [[190, 70, 40]], density: 1, alpha: [0.2, 0.5], len: [15, 40], tooth: 0.4 });
-  crayon(roughRect(688, 636, 58, 15, 1), [688, 636, 58, 15], { colors: [[190, 70, 40]], density: 1, alpha: [0.2, 0.5], len: [15, 40], tooth: 0.4 });
-  // edge lines
+  if (extra) extra();
   polys.forEach(p => {
     for (let i = 0; i < p.length; i++) {
       const a = p[i], b = p[(i + 1) % p.length];
       if (R() < 0.8) pline(a[0], a[1], b[0], b[1], { color: [180, 65, 38], alpha: 0.35, width: 1, passes: 1 });
     }
   });
-  // eyes
+}
+
+const SHADE = [190, 70, 40];
+const PIECES = {
+  // legs are drawn 8px longer than they look; at rest they sit 8px higher with the top hidden under the body
+  leg: i => orangePiece([[LEGS[i][0], 730, LEGS[i][1], 110]]),
+  armL: () => orangePiece([[265, 580, 66, 82]], () =>
+    crayon(roughRect(265, 646, 66, 16, 1), [265, 646, 66, 16], { colors: [SHADE], density: 1, alpha: [0.2, 0.5], len: [15, 40], tooth: 0.4 })),
+  armR: () => orangePiece([[688, 567, 58, 84]], () =>
+    crayon(roughRect(688, 636, 58, 15, 1), [688, 636, 58, 15], { colors: [SHADE], density: 1, alpha: [0.2, 0.5], len: [15, 40], tooth: 0.4 })),
+  body: () => orangePiece([[328, 452, 362, 290]], () => {
+    // lighter top face (the box's lid)
+    crayon(roughRect(330, 452, 358, 26, 1), [330, 452, 358, 26], {
+      colors: [[244, 160, 118], [238, 142, 100]], density: 2.4, alpha: [0.4, 0.85], len: [8, 24], tooth: 0.4
+    });
+    // darker right side for volume
+    crayon(roughRect(672, 470, 18, 270, 1), [672, 470, 18, 270], {
+      colors: [SHADE], density: 1.2, alpha: [0.2, 0.5], len: [20, 50], angle: Math.PI / 2, tooth: 0.4
+    });
+  })
+};
+const PIECE_BOX = {
+  leg: i => [LEGS[i][0] - 8, 722, LEGS[i][1] + 16, 128],
+  armL: [255, 570, 86, 102], armR: [678, 557, 78, 104], body: [318, 442, 382, 310]
+};
+const legOffset = (s, i) => -8 + 8 * s.press[i]; // a pressing foot pushes 8px further down
+
+function creatureEyes(s) {
   [[380, 578, 53, 55], [555, 572, 53, 55]].forEach(([x, y, w, h]) => {
+    y += s.bodyDy;
+    if (s.blink) { y += (h - 8) / 2; h = 8; }
     crayon(roughRect(x, y, w, h, 1), [x, y, w, h], {
       colors: [[62, 30, 26], [80, 38, 30], [45, 25, 22]], density: 3.2, alpha: [0.55, 1], len: [10, 30], angle: -0.8, angleVar: 0.3, tooth: 0.35, width: [1.2, 2.4]
     });
@@ -226,7 +250,71 @@ function creature() {
   });
 }
 
-function cat() {
+function shifted(dy, fn) { ctx.save(); ctx.translate(0, dy); fn(); ctx.restore(); }
+
+// Draw the whole creature directly (used for the still frame).
+function creature(s = REST) {
+  LEGS.forEach((_, i) => shifted(legOffset(s, i), () => PIECES.leg(i)));
+  shifted(s.bodyDy + s.armDy[0], PIECES.armL);
+  shifted(s.bodyDy + s.armDy[1], PIECES.armR);
+  shifted(s.bodyDy, PIECES.body);
+  creatureEyes(s);
+}
+
+// paper showing through black pencil: thousands of tiny light specks inside a shape
+function specks(shape, [bx, by, bw, bh], n) {
+  ctx.save(); ctx.beginPath(); shape(ctx); ctx.clip();
+  for (let i = 0; i < n; i++) {
+    const x = rand(bx, bx + bw), y = rand(by, by + bh);
+    const r = R() < 0.9 ? rand(0.35, 0.8) : rand(0.8, 1.3);
+    ctx.fillStyle = col(R() < 0.8 ? [236, 228, 214] : [200, 180, 160], rand(0.2, 0.7));
+    ctx.beginPath(); ctx.ellipse(x, y, r * rand(1, 1.8), r, rand(-0.6, 0.6), 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+const CAT_BLACK = [28, 24, 22];
+const CAT_OPTS = {
+  colors: [CAT_BLACK, [45, 38, 34], [20, 18, 18]], density: 3.6, alpha: [0.55, 1], len: [8, 28], width: [1.2, 2.6],
+  angle: -0.3, angleVar: 0.9, tooth: 0.85, light: 8
+};
+function solid(shape, a) { ctx.save(); ctx.beginPath(); shape(ctx); ctx.fillStyle = `rgba(22,19,18,${a})`; ctx.fill(); ctx.restore(); }
+
+function catmull(p, t) {
+  const n = p.length - 1, f = t * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+  const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(n, i + 2)];
+  const h = (a, b, c2, d) => 0.5 * ((2 * b) + (-a + c2) * u + (2 * a - 5 * b + 4 * c2 - d) * u * u + (-a + 3 * b - 3 * c2 + d) * u * u * u);
+  return [h(p0[0], p1[0], p2[0], p3[0]), h(p0[1], p1[1], p2[1], p3[1])];
+}
+
+// The tail hangs over the edge of the lid; sway (-1..1) swings its tip.
+function catTail(sway = 0) {
+  const spine = [[160, 206], [110, 200], [70, 214], [52, 262], [44, 312], [56, 356], [90, 372], [120, 360]]
+    .map(([x, y], i) => i < 3 ? [x, y] : [x + 7 * sway * (i - 2) / 5, y - 2 * sway * (i - 2) / 5]);
+  const N = 80, pts = [];
+  for (let i = 0; i <= N; i++) pts.push(catmull(spine, i / N));
+  const left = [], right = [];
+  pts.forEach((pt, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(N, i + 1)];
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    const w = 11.5 - 3.5 * (i / N); // tapering ribbon
+    left.push([pt[0] - dy / L * w, pt[1] + dx / L * w]);
+    right.push([pt[0] + dy / L * w, pt[1] - dx / L * w]);
+  });
+  const outline = left.concat(right.slice().reverse());
+  const tail = c => polyPath(c, outline);
+  solid(tail, 0.8);
+  crayon(tail, [30, 180, 140, 205], Object.assign({}, CAT_OPTS, { angle: 1.2 }));
+  // warm highlight along one side of the tail
+  const inner = left.slice(12, 72), mid = inner.map((p, k) => { const q = pts[12 + k]; return [p[0] * 0.45 + q[0] * 0.55, p[1] * 0.45 + q[1] * 0.55]; });
+  const innerPoly = inner.concat(mid.reverse());
+  crayon(c => polyPath(c, innerPoly), [30, 180, 140, 205], { colors: [[150, 100, 62], [175, 120, 78]], density: 0.7, alpha: [0.2, 0.5], len: [5, 14], tooth: 0.6, angle: 1.3 });
+  specks(tail, [30, 180, 140, 205], 2400);
+}
+
+// Body, head, ears, closed eyes and paws. twitch (0..1) flicks the right ear back.
+function catBody(twitch = 0) {
+  const ex = -6 * twitch, ey = 6 * twitch;
   const body = c => {
     c.moveTo(122, 241);
     c.bezierCurveTo(104, 205, 116, 152, 170, 132);
@@ -235,7 +323,7 @@ function cat() {
     c.bezierCurveTo(390, 128, 394, 114, 399, 103);
     c.bezierCurveTo(408, 112, 414, 118, 420, 123);
     c.bezierCurveTo(436, 119, 450, 118, 458, 119);
-    c.lineTo(467, 104);
+    c.lineTo(467 + ex, 104 + ey);
     c.bezierCurveTo(478, 124, 486, 150, 483, 176);
     c.bezierCurveTo(480, 200, 470, 214, 456, 222);
     c.bezierCurveTo(464, 226, 466, 238, 456, 242);
@@ -244,63 +332,21 @@ function cat() {
     c.bezierCurveTo(400, 236, 380, 240, 360, 242);
     c.closePath();
   };
-  // tail as a tapering ribbon
-  const tailPts = [];
-  const P = [[160, 206], [110, 200], [70, 214], [52, 262], [44, 312], [56, 356], [90, 372], [120, 360]];
-  function catmull(p, t) {
-    const n = p.length - 1, f = t * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
-    const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(n, i + 2)];
-    const h = (a, b, c2, d) => 0.5 * ((2 * b) + (-a + c2) * u + (2 * a - 5 * b + 4 * c2 - d) * u * u + (-a + 3 * b - 3 * c2 + d) * u * u * u);
-    return [h(p0[0], p1[0], p2[0], p3[0]), h(p0[1], p1[1], p2[1], p3[1])];
-  }
-  const N = 80;
-  for (let i = 0; i <= N; i++) tailPts.push(catmull(P, i / N));
-  const left = [], right = [];
-  tailPts.forEach((pt, i) => {
-    const a = tailPts[Math.max(0, i - 1)], b = tailPts[Math.min(N, i + 1)];
-    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
-    const w = 11.5 - 3.5 * (i / N);
-    left.push([pt[0] - dy / L * w, pt[1] + dx / L * w]);
-    right.push([pt[0] + dy / L * w, pt[1] - dx / L * w]);
-  });
-  const tailPoly = left.concat(right.reverse());
-  const tail = c => polyPath(c, tailPoly);
-
-  const BLACK = [28, 24, 22], BLACK2 = [45, 38, 34];
-  const opts = {
-    colors: [BLACK, BLACK2, [20, 18, 18]], density: 3.6, alpha: [0.55, 1], len: [8, 28], width: [1.2, 2.6],
-    angle: -0.3, angleVar: 0.9, tooth: 0.85, light: 8
-  };
-  const solid = (shape, a) => { ctx.save(); ctx.beginPath(); shape(ctx); ctx.fillStyle = `rgba(22,19,18,${a})`; ctx.fill(); ctx.restore(); };
-  solid(tail, 0.8);
-  crayon(tail, [30, 180, 140, 205], Object.assign({}, opts, { angle: 1.2 }));
-  // warm highlight along the tail's outer curve
-  const inner = left.slice(12, 72), mid = inner.map((p, k) => { const q = tailPts[12 + k]; return [p[0] * 0.45 + q[0] * 0.55, p[1] * 0.45 + q[1] * 0.55]; }), innerPoly = inner.concat(mid.reverse());
-  crayon(c => polyPath(c, innerPoly), [30, 180, 140, 205], { colors: [[150, 100, 62], [175, 120, 78]], density: 0.7, alpha: [0.2, 0.5], len: [5, 14], tooth: 0.6, angle: 1.3 });
   solid(body, 0.82);
-  crayon(body, [100, 100, 390, 145], opts);
-  crayon(body, [100, 100, 390, 145], Object.assign({}, opts, { density: 0.8, tooth: 0.7 }));
-  // paper showing through the black pencil: clustered light specks
-  ctx.save(); ctx.beginPath(); body(ctx); tail(ctx); ctx.clip();
-  for (let i = 0; i < 11000; i++) {
-    const x = rand(30, 490), y = rand(98, 385);
-    const r = R() < 0.9 ? rand(0.35, 0.8) : rand(0.8, 1.3);
-    ctx.fillStyle = col(R() < 0.8 ? [236, 228, 214] : [200, 180, 160], rand(0.2, 0.7));
-    ctx.beginPath(); ctx.ellipse(x, y, r * rand(1, 1.8), r, rand(-0.6, 0.6), 0, 7); ctx.fill();
-  }
-  ctx.restore();
+  crayon(body, [100, 100, 390, 145], CAT_OPTS);
+  crayon(body, [100, 100, 390, 145], Object.assign({}, CAT_OPTS, { density: 0.8, tooth: 0.7 }));
+  specks(body, [100, 98, 390, 148], 4800);
   // fuzzy fur on the outline: short strokes crossing the edge
   ctx.save(); ctx.lineCap = 'round';
-  const fur = document.createElement('canvas').getContext('2d');
+  const hit = document.createElement('canvas').getContext('2d');
+  const bodyPath = new Path2D(); body(bodyPath);
   for (let i = 0; i < 2600; i++) {
     const x = rand(100, 490), y = rand(98, 246);
-    fur.beginPath(); body(fur);
-    const inside = fur.isPointInPath(x, y);
-    if (!inside) continue;
+    if (!hit.isPointInPath(bodyPath, x, y)) continue;
     // only near the edge: test a shifted point
     const a = rand(0, Math.PI * 2), d = rand(3, 7);
-    if (fur.isPointInPath(x + Math.cos(a) * d, y + Math.sin(a) * d)) continue;
-    ctx.strokeStyle = col(BLACK, rand(0.25, 0.7));
+    if (hit.isPointInPath(bodyPath, x + Math.cos(a) * d, y + Math.sin(a) * d)) continue;
+    ctx.strokeStyle = col(CAT_BLACK, rand(0.25, 0.7));
     ctx.lineWidth = rand(0.8, 1.6);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * d * rand(0.6, 1.1), y + Math.sin(a) * d * rand(0.6, 1.1)); ctx.stroke();
   }
@@ -309,7 +355,7 @@ function cat() {
   crayon(c => { c.moveTo(401, 112); c.lineTo(416, 126); c.lineTo(400, 132); c.closePath(); }, [396, 108, 24, 26], {
     colors: [[178, 128, 104], [150, 104, 84]], density: 2.2, alpha: [0.45, 0.9], len: [3, 9], tooth: 0.45
   });
-  crayon(c => { c.moveTo(465, 112); c.lineTo(470, 132); c.lineTo(456, 124); c.closePath(); }, [452, 108, 22, 28], {
+  crayon(c => { c.moveTo(465 + ex * 0.8, 112 + ey * 0.8); c.lineTo(470, 132); c.lineTo(456, 124); c.closePath(); }, [446, 106, 30, 32], {
     colors: [[178, 128, 104], [150, 104, 84]], density: 2.2, alpha: [0.45, 0.9], len: [3, 9], tooth: 0.45
   });
   // closed eyes and paw outline in grey pencil
@@ -319,6 +365,19 @@ function cat() {
   ctx.save(); ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(120,112,104,0.55)';
   [[408, 231, 15], [444, 231, 15]].forEach(([px, py, r]) => { ctx.beginPath(); ctx.ellipse(px + rand(-1, 1), py, r, 9, 0, Math.PI * 1.05, Math.PI * 2.05); ctx.stroke(); });
   ctx.restore();
+}
+
+// breathing: the body swells upward from where it lies on the lid
+function breathe(b, fn) {
+  ctx.save();
+  ctx.translate(300, 242); ctx.scale(1 + 0.006 * b, 1 + 0.03 * b); ctx.translate(-300, -242);
+  fn();
+  ctx.restore();
+}
+
+function cat(s = REST) {
+  catTail(s.tail);
+  breathe(s.breath, () => catBody(s.twitch));
 }
 
 function lamp() {
@@ -374,26 +433,210 @@ function grain() {
 }
 
 
-function draw(seed) {
-  P.reset(seed);
-  paper();
-  lamp();
-  piano();
-  lampPool();
-  sheetMusic();
-  ledge();
-  pencil();
-  keys();
-  creature();
-  cat();
-  grain();
-  cv.dataset.done = '1';
+// ---------- animation ----------
+// An 8 second loop at 12 drawings per second ("on twos", like hand-drawn animation).
+// Everything that moves is a function of time t, so any frame can be drawn on its own.
+// Every frame also gets a fresh seed, so the pencil lines "boil" the way hand-drawn frames do.
+const FPS = 12, SECONDS = 8, FRAMES = FPS * SECONDS, BEAT = 0.5;
+const BOIL = 3;                            // the still parts are drawn 3 times and cycled
+const LEG_ORDER = [0, 2, 1, 3, 0, 3, 1, 2]; // which foot plays on each beat
+const TAU = Math.PI * 2;
+const REST = { t: 0, breath: 0, tail: 0, twitch: 0, bodyDy: 0, armDy: [0, 0], press: [0, 0, 0, 0], blink: false, flicker: 0 };
+
+const hash = n => { const r = Math.sin(n * 127.1 + 311.7) * 43758.5453; return r - Math.floor(r); };
+
+// All periods divide 8 s, so the last frame flows back into the first.
+function stateAt(t) {
+  const beat = Math.floor(t / BEAT), phase = (t % BEAT) / BEAT;
+  const hit = Math.max(0, 1 - phase * 2.2);   // quick press, then release
+  const press = [0, 0, 0, 0];
+  press[LEG_ORDER[beat % LEG_ORDER.length]] = hit;
+  return {
+    t,
+    breath: Math.sin(t / 4 * TAU),            // two slow breaths per loop
+    tail: Math.sin(t / 8 * TAU),
+    twitch: t >= 5 && t < 5.35 ? Math.sin((t - 5) / 0.35 * Math.PI) : 0,
+    bodyDy: 5 * hit,                          // the body dips a little on every press
+    armDy: [-7 * Math.sin(t * TAU), -7 * Math.sin(t * TAU + Math.PI)],
+    press,
+    blink: [2.5, 6.25].some(b => t >= b && t < b + 0.17),
+    flicker: 0.5 + 0.5 * Math.sin(t / 8 * TAU * 5) * Math.sin(t / 8 * TAU * 3 + 1)
+  };
 }
 
-let seed = 1703;
-const fromUrl = Number(new URLSearchParams(location.search).get('seed'));
-if (fromUrl) seed = fromUrl;
-draw(seed);
-const btn = document.getElementById('redraw');
-if (btn) btn.addEventListener('click', () => { seed = (seed * 16807 + 11) % 2147483647; draw(seed); });
+// A white key under a pressing foot goes a shade darker and drops a little.
+function pressedKeys(s) {
+  s.press.forEach((p, i) => {
+    if (p <= 0) return;
+    const cx = LEGS[i][0] + LEGS[i][1] / 2;
+    const x = 27 + 75 * Math.floor((cx - 27) / 75);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x + 1, 823, 73, 121);
+    blackKeyCenters().forEach(c => {
+      const l = Math.max(c - 25, x + 1), r = Math.min(c + 25, x + 74);
+      if (r > l) ctx.rect(l, 821, r - l, 80);
+    });
+    ctx.clip('evenodd');
+    ctx.fillStyle = `rgba(80,90,105,${0.16 * p})`;
+    ctx.fillRect(x, 820, 75, 130);
+    ctx.restore();
+    pline(x + 3, 944 + 3 * p, x + 72, 944 + 3 * p, { color: [95, 95, 95], alpha: 0.6 * p, passes: 1 });
+  });
+}
+
+function glowFlicker(s) {
+  const g = ctx.createRadialGradient(1015, 110, 10, 1015, 110, 200);
+  g.addColorStop(0, `rgba(255,232,140,${0.05 + 0.13 * s.flicker})`);
+  g.addColorStop(1, 'rgba(255,232,140,0)');
+  ctx.fillStyle = g; ctx.fillRect(800, 0, 376, 320);
+}
+
+// Little notes float up from the player, one per second, and fade out.
+function noteGlyph(kind) {
+  const INK = [58, 52, 50];
+  const head = (x, y) => {
+    ctx.save(); ctx.fillStyle = col(INK, 0.85); ctx.beginPath(); ctx.ellipse(x, y, 9, 6.5, -0.4, 0, 7); ctx.fill(); ctx.restore();
+    crayon(c => c.ellipse(x, y, 9.5, 7, -0.4, 0, 7), [x - 11, y - 9, 22, 18], { colors: [INK], density: 3, alpha: [0.4, 0.9], len: [3, 8], tooth: 0.5, angleVar: 1.5, pad: 0 });
+  };
+  const o = { color: INK, width: 2, alpha: 0.9, passes: 2 };
+  if (kind === 1) {          // two beamed eighths
+    head(0, 0); head(28, -6);
+    pline(8, -3, 8, -44, o); pline(36, -9, 36, -50, o);
+    pline(8, -44, 36, -50, Object.assign({}, o, { width: 4.5 }));
+  } else {
+    head(0, 0);
+    pline(8, -3, 8, -44, o);
+    if (kind === 0) {        // single eighth with a flag
+      ctx.save(); ctx.strokeStyle = col(INK, 0.85); ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(8, -44); ctx.bezierCurveTo(20, -36, 26, -28, 20, -16); ctx.stroke(); ctx.restore();
+    }
+  }
+}
+
+function floatingNotes(t) {
+  const life = 2.6;
+  for (let i = 0; i < SECONDS; i++) {
+    const age = (t - i + SECONDS) % SECONDS;
+    if (age > life) continue;
+    const x = 380 + hash(i) * 280 + 16 * Math.sin(age * 2.4 + i);
+    const y = 440 - age * 75;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, age / 0.3) * Math.min(1, (life - age) / 0.9);
+    ctx.translate(x, y); ctx.rotate(-0.25 + hash(i + 9) * 0.5); ctx.scale(1.3, 1.3);
+    noteGlyph(i % 3);
+    ctx.restore();
+  }
+}
+
+function drawBackground() {
+  paper(); lamp(); piano(); lampPool(); sheetMusic(); ledge(); pencil(); keys(); grain();
+}
+
+// The single still frame that matches the reference.
+function drawStill(seed) {
+  P.reset(seed);
+  paper(); lamp(); piano(); lampPool(); sheetMusic(); ledge(); pencil(); keys();
+  creature(); cat(); grain();
+}
+
+// Drawing the creature and cat takes a while, so each piece is drawn once per
+// boil variant into its own small canvas ("sprite"), then moved around per frame.
+const scratch = document.createElement('canvas'); scratch.width = W; scratch.height = H;
+function makeSprite([x, y, w, h], fn) {
+  const sx = scratch.getContext('2d');
+  sx.clearRect(0, 0, W, H); sx.drawImage(cv, 0, 0);   // keep what is on screen
+  ctx.clearRect(0, 0, W, H);
+  fn();
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(cv, x, y, w, h, 0, 0, w, h);
+  ctx.clearRect(0, 0, W, H); ctx.drawImage(scratch, 0, 0); // put it back before the browser paints
+  return { c, x, y };
+}
+const blit = (sp, dy = 0) => ctx.drawImage(sp.c, sp.x, sp.y + dy);
+
+const TAIL_STEPS = 9;                 // tail sway is quantised into 9 poses
+const CAT_BOX = [88, 84, 414, 170], TAIL_BOX = [18, 168, 156, 232];
+const sprites = { bg: [], legs: [], armL: [], armR: [], body: [], cat: [], tail: {}, twitch: {} };
+const twitchFrames = [];
+for (let f = 0; f < FRAMES; f++) if (stateAt(f / FPS).twitch > 0) twitchFrames.push(f);
+
+// Everything that has to be drawn before the animation can play, one job per task.
+const jobs = [];
+for (let v = 0; v < BOIL; v++) {
+  jobs.push(() => { P.seed(1703 + 7919 * v); sprites.bg[v] = makeSprite([0, 0, W, H], drawBackground); });
+  jobs.push(() => {
+    P.seed(2000 + v);
+    sprites.legs[v] = LEGS.map((_, i) => makeSprite(PIECE_BOX.leg(i), () => PIECES.leg(i)));
+    sprites.armL[v] = makeSprite(PIECE_BOX.armL, PIECES.armL);
+    sprites.armR[v] = makeSprite(PIECE_BOX.armR, PIECES.armR);
+    sprites.body[v] = makeSprite(PIECE_BOX.body, PIECES.body);
+  });
+  jobs.push(() => { P.seed(3000 + v); sprites.cat[v] = makeSprite(CAT_BOX, () => catBody(0)); });
+}
+for (let q = 0; q < TAIL_STEPS; q++) for (let v = 0; v < 2; v++) {
+  jobs.push(() => { P.seed(4000 + q * 10 + v); sprites.tail[q + '/' + v] = makeSprite(TAIL_BOX, () => catTail(q / (TAIL_STEPS - 1) * 2 - 1)); });
+}
+twitchFrames.forEach(f => jobs.push(() => {
+  P.seed(5000 + f); sprites.twitch[f] = makeSprite(CAT_BOX, () => catBody(stateAt(f / FPS).twitch));
+}));
+
+function renderFrame(f) {
+  f = ((f % FRAMES) + FRAMES) % FRAMES;
+  const s = stateAt(f / FPS), v = f % BOIL;
+  P.seed(90001 + f);
+  blit(sprites.bg[v]);
+  glowFlicker(s);
+  pressedKeys(s);
+  sprites.legs[v].forEach((sp, i) => blit(sp, legOffset(s, i)));
+  blit(sprites.armL[v], s.bodyDy + s.armDy[0]);
+  blit(sprites.armR[v], s.bodyDy + s.armDy[1]);
+  blit(sprites.body[v], s.bodyDy);
+  creatureEyes(s);
+  const q = Math.round((s.tail + 1) / 2 * (TAIL_STEPS - 1));
+  blit(sprites.tail[q + '/' + (f % 2)]);
+  breathe(s.breath, () => blit(sprites.twitch[f] || sprites.cat[v]));
+  floatingNotes(s.t);
+}
+
+// ---------- page wiring ----------
+const params = new URLSearchParams(location.search);
+const still = params.has('still');
+const seed = Number(params.get('seed')) || 1703;
+drawStill(seed);
+cv.dataset.done = '1';
+
+const api = { FPS, SECONDS, FRAMES, renderFrame, ready: false };
+window.pianoCat = api;
+const btn = document.getElementById('play');
+if (still) { if (btn) btn.hidden = true; return; }
+
+// draw the sprites one job per task so the page stays responsive
+let j = 0;
+(function next() {
+  jobs[j++]();
+  if (btn) btn.textContent = `Loading ${Math.round(j / jobs.length * 100)}%`;
+  if (j < jobs.length) return setTimeout(next, 0);
+  api.ready = true;
+  if (!params.has('export')) start();
+})();
+
+function start() {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let playing = !reduce, t0 = performance.now(), paused = 0, last = -1;
+  const label = () => { if (btn) { btn.textContent = playing ? 'Pause' : 'Play'; btn.disabled = false; } };
+  label();
+  renderFrame(0);
+  if (btn) btn.addEventListener('click', () => {
+    playing = !playing;
+    if (playing) t0 = performance.now() - paused; else paused = performance.now() - t0;
+    label();
+  });
+  (function loop(now) {
+    if (playing) {
+      const f = Math.floor((now - t0) / 1000 * FPS) % FRAMES;
+      if (f !== last) { renderFrame(f); last = f; }
+    }
+    requestAnimationFrame(loop);
+  })(performance.now());
+}
 })();

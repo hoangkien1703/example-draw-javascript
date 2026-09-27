@@ -42,7 +42,7 @@ export async function renderScene(b, { page = 'index.html', seed } = {}) {
   const p = await b.newPage({ viewport: { width: 1400, height: 1400 } });
   const errors = [];
   p.on('pageerror', e => errors.push(e.message));
-  const url = pathToFileURL(path.join(ROOT, page)).href + (seed ? `?seed=${seed}` : '');
+  const url = pathToFileURL(path.join(ROOT, page)).href + '?still' + (seed ? `&seed=${seed}` : '');
   await p.goto(url);
   try {
     await p.waitForFunction(() => document.querySelector('canvas')?.dataset.done === '1', null, { timeout: 60000 });

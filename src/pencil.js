@@ -5,6 +5,7 @@
 //   pline(x1, y1, x2, y2, o)  a wobbly graphite line with broken pressure
 //   roughPoly / roughRect     jittered outlines so edges look hand drawn
 //   reset(seed)               re-seed the generator and rebuild the paper-tooth mask
+//   seed(s)                   re-seed only (for animation frames)
 // Same seed + same call order = the same picture, pixel for pixel.
 (function (global) {
 function createPencil(canvas) {
@@ -134,8 +135,10 @@ function pline(x1, y1, x2, y2, o = {}) {
 }
 
 function reset(seed) { R = mulberry32(seed); buildTooth(); }
+// re-seed only, keeping the paper-tooth mask (cheap; use it between animation frames)
+function seed(s) { R = mulberry32(s); }
 
-return { W, H, ctx, reset, random: () => R(), rand, pick, col, roughPoly, rectPts, polyPath, roughRect, crayon, pline };
+return { W, H, ctx, reset, seed, random: () => R(), rand, pick, col, roughPoly, rectPts, polyPath, roughRect, crayon, pline };
 }
 global.createPencil = createPencil;
 })(window);

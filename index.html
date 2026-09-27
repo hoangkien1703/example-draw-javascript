@@ -40,6 +40,8 @@
     border: 0; border-radius: 999px; padding: 6px 16px; cursor: pointer;
   }
   button:hover { background: #fff; }
+  button:disabled { opacity: .6; cursor: progress; }
+  code { font: .9em ui-monospace, Menlo, monospace; color: var(--ink); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   p { margin: 0; color: var(--muted); max-width: 62ch; }
 </style>
@@ -49,10 +51,10 @@
 <main>
   <header>
     <h1>Pencil Piano Cat</h1>
-    <button id="redraw" type="button">Redraw strokes</button>
+    <button id="play" type="button" disabled>Loading…</button>
   </header>
   <div class="frame"><canvas id="c" width="1176" height="1176" aria-label="Colored-pencil drawing: a black cat sleeps on an upright piano beside a glowing lamp while an orange blocky creature plays the keys"></canvas></div>
-  <p>One still frame, drawn from scratch on a canvas in plain JavaScript. Every fill is made of thousands of short pencil strokes, then the paper tooth is knocked out of them. Redraw rolls a new set of strokes.</p>
+  <p>Drawn from scratch on a canvas in plain JavaScript. Every fill is made of thousands of short pencil strokes with the paper tooth knocked out of them. The loop runs 8 seconds at 12 drawings per second, and each drawing gets fresh strokes, like hand-drawn animation. Add <code>?still</code> to the address for the single frame that matches the original.</p>
 </main>
 <script src="src/pencil.js"></script>
 <script src="src/piano-cat.js"></script>

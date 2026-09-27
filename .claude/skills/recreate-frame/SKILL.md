@@ -35,6 +35,16 @@ Run `npm install` once. If `npx playwright install chromium` is not possible, fi
 - Outlines: `pline` with low alpha and one or two passes.
 - Finish with a light per-pixel grain over the whole canvas.
 
+## Animating the scene
+
+If asked for a video or animation, follow "Animate it" in the README and the code in `src/piano-cat.js`:
+
+- Split each moving object into a function that draws it at rest; apply motion as transforms or offsets.
+- Write `stateAt(t)` with every period dividing the loop length so it loops cleanly.
+- Render at 12 fps and re-seed every frame (`P.seed`) so the lines boil.
+- Cache anything slow: static background variants and one sprite per moving piece per variant. Aim for under 80 ms per frame so the page plays live.
+- Expose `window.pianoCat`-style `{ FPS, FRAMES, renderFrame, ready }` so `npm run video` can export it, then view a contact sheet of a few frames before delivering.
+
 ## Deliverable
 
 The scene file, the page that loads it, and a final `npm run compare` image to show the match. Mention what still differs from the reference.
